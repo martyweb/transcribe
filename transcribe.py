@@ -1,29 +1,12 @@
-#import moviepy.editor as mp
-#import speech_recognition as sr
 import whisper
 import os
 
-# # Load your video file
-# video = mp.VideoFileClip("/mnt/r/2021-01-02/GH010018.MP4")
+# Load the whisper model
+model = whisper.load_model("base")
+path = "/mnt/r/"
+recursive = True
 
-# # Extract audio from the video
-# video.audio.write_audiofile("/mnt/r/2021-01-02/GH010018.wav")
-
-# # Initialize recognizer
-# recognizer = sr.Recognizer()
-
-# # Load the extracted audio
-# audio = sr.AudioFile("/mnt/r/2021-01-02/GH010018.wav")
-
-# with audio as source:
-#     audio_file = recognizer.record(source)
-
-# # Transcribe the audio
-# text = recognizer.recognize_google(audio_file)
-
-#print(text)
-
-def create_srt(transcription, filename="subtitles.srt"):
+def create_srt(transcription, filename):
     with open(filename, "w") as f:
         for i, segment in enumerate(transcription['segments']):
             start = segment['start']
@@ -42,17 +25,51 @@ def create_srt(transcription, filename="subtitles.srt"):
             f.write(f"{srt_time(start)} --> {srt_time(end)}\n")
             f.write(f"{text.strip()}\n\n")
 
-# Load the whisper model
-model = whisper.load_model("base")
+def transcode_path(path, recursive=False):
+    cnt = 0
+    err=0 
+    
+    #check path
+    if(not os.path.exists(path)):
+        #raise Exception(f'{path} does not exist')
+        print(f'{path} does not exist')
+        return 0
+    
+    #if(not path.endswith('/')): path+='/'
+    
+    print(f'{len(os.listdir(path))} file(s) in {path}')
+    
+    #loop through files in directory
+    for filename in os.listdir(path):
+        
+        #recursive transcode
+        fullpath = os.path.join(path, filename)
+        if(os.path.isdir(fullpath) and recursive): 
+            transcode_path(fullpath, recursive)
+        
+        #check extention
+        if(filename.lower().endswith("mp4")):
+            #filename = "GH010018.MP4"
+            filename_noext = filename.split(".")[0]
+            
+            try:
+                
+                #check for existing SRT
+                srt_file = os.path.join(path, filename_noext) + ".srt"
+                if(not os.path.exists(srt_file)):
+                    print(f'transcribing {fullpath}')
+                    result = model.transcribe(fullpath, word_timestamps=True)
+                    create_srt(result, srt_file)
+                    cnt+=1
+                else:
+                    print(f'{srt_file} exists, skipping')
+            except Exception as e:
+                print(e)
+                #err+=1
+            
+    print(f'{cnt} files transcribed')
 
-path = "/mnt/r/2021-01-02/"
 
-#loop through files in director
-for filename in os.listdir(path):
 
-    #check extention
-    if(filename.lower().endswith("mp4")):
-        #filename = "GH010018.MP4"
-        filename_noext = filename.split(".")[0]
-        result = model.transcribe(path + filename, word_timestamps=True)
-        create_srt(result, path + filename_noext + ".srt")
+transcode_path(path, recursive)
+
